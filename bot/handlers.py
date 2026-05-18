@@ -3,9 +3,21 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from bot.states import ProfileForm, BrowseForm
-from bot.keyboards import main_keyboard, gender_keyboard, browse_keyboard
-from bot.database import save_profile, delete_profile, get_profiles_by_class
+from bot.states import LanguageForm, ProfileForm, BrowseForm
+from bot.texts import t
+from bot.keyboards import (
+    language_keyboard,
+    main_keyboard,
+    gender_keyboard,
+    browse_keyboard,
+)
+from bot.database import (
+    save_profile,
+    delete_profile,
+    get_profiles_by_class,
+    get_user_language,
+    set_user_language,
+)
 
 router = Router()
 
@@ -13,82 +25,109 @@ router = Router()
 browse_cache = {}
 
 
-@router.message(CommandStart())
-async def start(message: Message, state: FSMContext):
-    await state.clear()
+async def show_main_menu(message: Message, language: str):
     await message.answer(
-        "Здарова. Я помогу найти пару на вальс.\n\n"
-        "Выбирай, что делаем:",
-        reply_markup=main_keyboard,
+        f"{t(language, 'start')}\n\n{t(language, 'choose_action')}",
+        reply_markup=main_keyboard(language),
     )
 
 
-@router.message(F.text == "создать / обновить анкету")
-async def create_profile(message: Message, state: FSMContext):
-    await state.set_state(ProfileForm.gender)
-    await message.answer("Выбирай свой пол", reply_markup=gender_keyboard)
+@router.message(CommandStart())
+async def start(message: Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(LanguageForm.language)
+    await message.answer(
+        t("ru", "choose_language"),
+        reply_markup=language_keyboard(),
+    )
+
+
+@router.message(LanguageForm.language)
+async def process_language(message: Message, state: FSMContext):
+    if message.text == "Русский":
+        language = "ru"
+    elif message.text == "English":
+        language = "en"
+    else:
+        await message.answer(
+            t("ru", "choose_language"),
+            reply_markup=language_keyboard(),
+        )
+        return
+
+    await set_user_language(message.from_user.id, language)
+    await state.clear()
+    await message.answer(t(language, "language_saved"))
+    await show_main_menu(message, language)
 
 
 @router.message(ProfileForm.gender)
 async def process_gender(message: Message, state: FSMContext):
-    if message.text not in ["девчонка", "мальчик"]:
-        await message.answer("Выбери кнопкой: девчонка или мальчик")
+    language = await get_user_language(message.from_user.id)
+    allowed_genders = [t(language, "gender_girl"), t(language, "gender_boy")]
+
+    if message.text not in allowed_genders:
+        await message.answer(t(language, "choose_gender_button"))
         return
 
     await state.update_data(gender=message.text)
     await state.set_state(ProfileForm.name)
-    await message.answer("Введи свое имя")
+    await message.answer(t(language, "enter_name"))
 
 
 @router.message(ProfileForm.name)
 async def process_name(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
     name = message.text.strip()
 
     if len(name) < 2 or len(name) > 40:
-        await message.answer("Имя должно быть от 2 до 40 символов")
+        await message.answer(t(language, "bad_name"))
         return
 
     await state.update_data(name=name)
     await state.set_state(ProfileForm.class_name)
-    await message.answer("Ты кто с какого? Например: Л, Фил, Им, Физ")
+    await message.answer(t(language, "enter_class"))
 
 
 @router.message(ProfileForm.class_name)
 async def process_class(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
     class_name = message.text.strip()
 
     if len(class_name) < 1 or len(class_name) > 20:
-        await message.answer("Класс/профиль должен быть от 1 до 20 символов")
+        await message.answer(t(language, "bad_class"))
         return
 
     await state.update_data(class_name=class_name)
     await state.set_state(ProfileForm.height)
-    await message.answer("Теперь свой рост числом. Например: 169")
+    await message.answer(t(language, "enter_height"))
 
 
 @router.message(ProfileForm.height)
 async def process_height(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
+
     try:
         height = int(message.text.strip())
     except ValueError:
-        await message.answer("Рост надо числом. Например: 169")
+        await message.answer(t(language, "bad_height_number"))
         return
 
     if height < 120 or height > 230:
-        await message.answer("Введи нормальный рост от 120 до 230")
+        await message.answer(t(language, "bad_height_range"))
         return
 
     await state.update_data(height=height)
     await state.set_state(ProfileForm.photo)
-    await message.answer("Кинь фотку")
+    await message.answer(t(language, "enter_photo"))
 
 
 @router.message(ProfileForm.photo)
 async def process_photo(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
+
     if not message.photo:
-        await message.answer(
-            "Это не фотка. Кинь именно фото, не стикер и не текст."
-        )
+        await message.answer(t(language, "bad_photo"))
         return
 
     # Telegram присылает несколько размеров фото. Обычно последний — самый крупный.
@@ -96,34 +135,34 @@ async def process_photo(message: Message, state: FSMContext):
 
     await state.update_data(photo_file_id=photo_file_id)
     await state.set_state(ProfileForm.description)
-    await message.answer("Опиши себя немного")
+    await message.answer(t(language, "enter_description"))
 
 
 @router.message(ProfileForm.description)
 async def process_description(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
     description = message.text.strip()
 
     if len(description) < 5:
-        await message.answer("Слишком коротко. Напиши хотя бы пару слов")
+        await message.answer(t(language, "bad_description_short"))
         return
 
     if len(description) > 500:
-        await message.answer("Слишком длинно. До 500 символов")
+        await message.answer(t(language, "bad_description_long"))
         return
 
     await state.update_data(description=description)
     await state.set_state(ProfileForm.contact)
-    await message.answer(
-        "Кинь ссылку на тг/инсту/вк или юзернейм, где с тобой можно связаться"
-    )
+    await message.answer(t(language, "enter_contact"))
 
 
 @router.message(ProfileForm.contact)
 async def process_contact(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
     contact = message.text.strip()
 
     if len(contact) < 2 or len(contact) > 100:
-        await message.answer("Контакт выглядит странно. Введи нормально")
+        await message.answer(t(language, "bad_contact"))
         return
 
     data = await state.get_data()
@@ -141,32 +180,19 @@ async def process_contact(message: Message, state: FSMContext):
 
     await state.clear()
     await message.answer(
-        "Анкета сохранена.",
-        reply_markup=main_keyboard,
+        t(language, "profile_saved"),
+        reply_markup=main_keyboard(language),
     )
-
-
-@router.message(F.text == "удалить мою анкету")
-async def remove_profile(message: Message):
-    await delete_profile(message.from_user.id)
-    await message.answer("Твоя анкета удалена.", reply_markup=main_keyboard)
-
-
-@router.message(F.text == "смотреть анкеты")
-async def browse_profiles_start(message: Message, state: FSMContext):
-    await state.set_state(BrowseForm.class_name)
-    await message.answer("Какой класс хочешь посмотреть? Например: Л, Фил, Им, Физ")
 
 
 @router.message(BrowseForm.class_name)
 async def browse_profiles_by_class(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
     class_name = message.text.strip()
     profiles = await get_profiles_by_class(class_name)
 
     if not profiles:
-        await message.answer(
-            "По этому классу пока нет анкет. Попробуй другой класс."
-        )
+        await message.answer(t(language, "no_profiles"))
         return
 
     browse_cache[message.from_user.id] = profiles
@@ -176,36 +202,39 @@ async def browse_profiles_by_class(message: Message, state: FSMContext):
 
 async def send_profile_page(message_or_callback, profiles, index: int):
     profile = profiles[index]
+    user_id = message_or_callback.from_user.id
+    language = await get_user_language(user_id)
 
     caption = (
         f"{profile['name']}, {profile['class_name']}\n"
         f"{profile['height']} см\n\n"
         f"{profile['description']}\n\n"
         f"{profile['contact']}\n\n"
-        f"Страница {index + 1} из {len(profiles)}"
+        f"{t(language, 'page').format(current=index + 1, total=len(profiles))}"
     )
 
     if isinstance(message_or_callback, Message):
         await message_or_callback.answer_photo(
             photo=profile["photo_file_id"],
             caption=caption,
-            reply_markup=browse_keyboard(index, len(profiles)),
+            reply_markup=browse_keyboard(index, len(profiles), language),
         )
     else:
         await message_or_callback.message.answer_photo(
             photo=profile["photo_file_id"],
             caption=caption,
-            reply_markup=browse_keyboard(index, len(profiles)),
+            reply_markup=browse_keyboard(index, len(profiles), language),
         )
 
 
 @router.callback_query(F.data.startswith("page:"))
 async def change_page(callback: CallbackQuery):
+    language = await get_user_language(callback.from_user.id)
     index = int(callback.data.split(":")[1])
     profiles = browse_cache.get(callback.from_user.id)
 
     if not profiles:
-        await callback.answer("Список устарел. Выбери класс заново.", show_alert=True)
+        await callback.answer(t(language, "expired_list"), show_alert=True)
         return
 
     await callback.message.delete()
@@ -215,6 +244,35 @@ async def change_page(callback: CallbackQuery):
 
 @router.callback_query(F.data == "change_class")
 async def change_class(callback: CallbackQuery, state: FSMContext):
+    language = await get_user_language(callback.from_user.id)
     await state.set_state(BrowseForm.class_name)
-    await callback.message.answer("Какой класс хочешь посмотреть?")
+    await callback.message.answer(t(language, "browse_class"))
     await callback.answer()
+
+
+@router.message()
+async def menu_router(message: Message, state: FSMContext):
+    language = await get_user_language(message.from_user.id)
+
+    if message.text == t(language, "create_profile"):
+        await state.set_state(ProfileForm.gender)
+        await message.answer(
+            t(language, "choose_gender"),
+            reply_markup=gender_keyboard(language),
+        )
+        return
+
+    if message.text == t(language, "browse_profiles"):
+        await state.set_state(BrowseForm.class_name)
+        await message.answer(t(language, "browse_class"))
+        return
+
+    if message.text == t(language, "delete_profile"):
+        await delete_profile(message.from_user.id)
+        await message.answer(
+            t(language, "profile_deleted"),
+            reply_markup=main_keyboard(language),
+        )
+        return
+
+    await show_main_menu(message, language)
