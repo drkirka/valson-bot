@@ -1,3 +1,6 @@
+from typing import Optional
+
+
 TEXTS = {
     "ru": {
         "choose_language": "Выбери язык / Choose language",
@@ -70,6 +73,6 @@ TEXTS = {
 }
 
 
-def t(language: str | None, key: str) -> str:
+def t(language: Optional[str], key: str) -> str:
     language = language if language in TEXTS else "ru"
     return TEXTS[language][key]
