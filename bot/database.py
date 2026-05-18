@@ -6,6 +6,13 @@ DB_PATH = "bot.db"
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                language TEXT NOT NULL DEFAULT 'ru'
+            )
+        """)
+
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS profiles (
                 user_id INTEGER PRIMARY KEY,
                 gender TEXT NOT NULL,
@@ -18,6 +25,28 @@ async def init_db():
             )
         """)
         await db.commit()
+
+
+async def set_user_language(user_id: int, language: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO users (user_id, language)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                language = excluded.language
+        """, (user_id, language))
+        await db.commit()
+
+
+async def get_user_language(user_id: int) -> str:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT language FROM users WHERE user_id = ?",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+
+    return row[0] if row else "ru"
 
 
 async def save_profile(
@@ -56,6 +85,8 @@ async def save_profile(
             contact,
         ))
         await db.commit()
+
+
 async def delete_profile(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM profiles WHERE user_id = ?", (user_id,))
