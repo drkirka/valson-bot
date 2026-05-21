@@ -185,6 +185,7 @@ async def browse_profiles_by_class(message: Message, state: FSMContext):
 
     profiles = await get_profiles_by_class(cls(text))
     if not profiles:
+        await state.clear()
         drop_cache(message.from_user.id)
         await message.answer(t(language, "no_profiles"), reply_markup=main_keyboard(language))
         return
@@ -192,7 +193,6 @@ async def browse_profiles_by_class(message: Message, state: FSMContext):
     browse_cache[message.from_user.id] = profiles
     await state.clear()
     await send_profile_page(message, profiles, 0)
-
 
 async def send_profile_page(message_or_callback, profiles, index: int):
     profile = profiles[index]
@@ -244,21 +244,25 @@ async def change_class(callback: CallbackQuery, state: FSMContext):
 async def menu_router(message: Message, state: FSMContext):
     language = await get_user_language(message.from_user.id)
     if message.text == t(language, "create_profile"):
+        await state.clear()
         drop_cache(message.from_user.id)
         await state.set_state(ProfileForm.gender)
         await message.answer(t(language, "choose_gender"), reply_markup=gender_keyboard(language))
         return
     if message.text == t(language, "browse_profiles"):
+        await state.clear()
         drop_cache(message.from_user.id)
         await state.set_state(BrowseForm.class_name)
         await message.answer(t(language, "browse_class"))
         return
     if message.text == t(language, "delete_profile"):
+        await state.clear()
         existing_profile = await get_profile(message.from_user.id)
         if not existing_profile:
             await message.answer(t(language, "no_profile_to_delete"), reply_markup=main_keyboard(language))
             return
         await delete_profile(message.from_user.id)
+        await state.clear()
         drop_cache(message.from_user.id)
         await message.answer(t(language, "profile_deleted"), reply_markup=main_keyboard(language))
         return
