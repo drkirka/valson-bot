@@ -1,6 +1,4 @@
 from typing import Optional
-
-
 TEXTS = {
     "ru": {
         "choose_language": "Выбери язык / Choose language",
@@ -38,6 +36,14 @@ TEXTS = {
         "page": "Страница {current} из {total}",
         "cm": "см",
         "cancelled": "Окей, окей, отменила. Драма снята с репертуара.",
+        "like": "лайк",
+        "skip": "скип",
+        "liked": "Лайк сохранён.",
+        "match": "МЭТЧ. Вы оба лайкнули друг друга.",
+        "new_match": "У тебя новый мэтч.",
+        "already_liked": "Ты уже лайкал эту анкету.",
+        "own_profile": "Свою анкету лайкать нельзя. Самолюбие это хорошо, но нет.",
+        "score": "Совместимость: {score}%",
     },
     "en": {
         "choose_language": "Choose language / Выбери язык",
@@ -75,10 +81,16 @@ TEXTS = {
         "page": "Page {current} of {total}",
         "cm": "cm",
         "cancelled": "Cancelled. Drama removed from the program.",
+        "like": "like",
+        "skip": "skip",
+        "liked": "Like saved.",
+        "match": "MATCH. You both liked each other.",
+        "new_match": "You have a new match.",
+        "already_liked": "You already liked this profile.",
+        "own_profile": "You cannot like your own profile. Nice try.",
+        "score": "Compatibility: {score}%",
     },
 }
-
-
 def t(language: Optional[str], key: str) -> str:
     language = language if language in TEXTS else "ru"
     return TEXTS[language][key]
