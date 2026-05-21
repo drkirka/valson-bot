@@ -1,40 +1,37 @@
 # Valson Bot
 
-Telegram bot for collecting and browsing waltz partner profiles.
+Telegram bot for waltz partner search inside my ed.institution.
+
+I started this project because students had a problem with finding a dance partner in real life. It was awkward and slow, so I decided to make a bot that gives them a simple way to create a profile, browse other profiles, like someone, and get a mutual match.
 
 ## Features
 
-- Create and edit profiles
-- Upload photos
-- Browse profiles
+- language selection
+- profile questionnaire
+- profile saving and updating
+- profile deletion
+- browsing by class
+- compatibility score
+- likes
+- mutual matches
+- inline buttons
 - SQLite database
+- tests
 
-## Setup
+## Stack
 
-### macOS / Linux
+Python, aiogram, aiosqlite, SQLite, pytest.
 
-```bash
+## how to run
+
+Create `.env` file:
+
+BOT_TOKEN=your_telegram_bot_token
+DB_PATH=bot.db
+
+Install dependencies and run:
+
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 python -m bot.main
-```
-
-### Windows PowerShell
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-python -m bot.main
-```
-
-## Configuration
-
-Edit `.env`:
-
-```env
-BOT_TOKEN=your_bot_token
-```
