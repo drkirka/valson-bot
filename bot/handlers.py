@@ -3,7 +3,6 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-
 from bot.states import LanguageForm, ProfileForm, BrowseForm
 from bot.texts import t
 from bot.keyboards import language_keyboard, main_keyboard, gender_keyboard, browse_keyboard
@@ -14,26 +13,19 @@ from bot.database import (
 
 router = Router()
 browse_cache = {}
-
-
 def txt(value: Optional[str]) -> str:
     return (value or "").strip()
-
-
 def cls(value: str) -> str:
     return " ".join(value.split()).upper()
 
-
 def drop_cache(user_id: int) -> None:
     browse_cache.pop(user_id, None)
-
 
 async def show_main_menu(message: Message, language: str):
     await message.answer(
         f"{t(language, 'start')}\n\n{t(language, 'choose_action')}",
         reply_markup=main_keyboard(language),
     )
-
 
 @router.message(CommandStart())
 async def start(message: Message, state: FSMContext):
@@ -49,8 +41,6 @@ async def cancel(message: Message, state: FSMContext):
     await state.clear()
     drop_cache(message.from_user.id)
     await message.answer(t(language, "cancelled"), reply_markup=main_keyboard(language))
-
-
 @router.message(LanguageForm.language)
 async def process_language(message: Message, state: FSMContext):
     if message.text == "Русский":
@@ -65,8 +55,6 @@ async def process_language(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(t(language, "language_saved"))
     await show_main_menu(message, language)
-
-
 @router.message(ProfileForm.gender)
 async def process_gender(message: Message, state: FSMContext):
     language = await get_user_language(message.from_user.id)
@@ -77,7 +65,6 @@ async def process_gender(message: Message, state: FSMContext):
     await state.update_data(gender=message.text)
     await state.set_state(ProfileForm.name)
     await message.answer(t(language, "enter_name"))
-
 
 @router.message(ProfileForm.name)
 async def process_name(message: Message, state: FSMContext):
@@ -90,7 +77,6 @@ async def process_name(message: Message, state: FSMContext):
     await state.set_state(ProfileForm.class_name)
     await message.answer(t(language, "enter_class"))
 
-
 @router.message(ProfileForm.class_name)
 async def process_class(message: Message, state: FSMContext):
     language = await get_user_language(message.from_user.id)
@@ -102,7 +88,6 @@ async def process_class(message: Message, state: FSMContext):
     await state.set_state(ProfileForm.height)
     await message.answer(t(language, "enter_height"))
 
-
 @router.message(ProfileForm.height)
 async def process_height(message: Message, state: FSMContext):
     language = await get_user_language(message.from_user.id)
@@ -111,13 +96,12 @@ async def process_height(message: Message, state: FSMContext):
     except ValueError:
         await message.answer(t(language, "bad_height_number"))
         return
-    if height < 120 or height > 230:
+    if height < 100 or height > 250:
         await message.answer(t(language, "bad_height_range"))
         return
     await state.update_data(height=height)
     await state.set_state(ProfileForm.photo)
     await message.answer(t(language, "enter_photo"))
-
 
 @router.message(ProfileForm.photo)
 async def process_photo(message: Message, state: FSMContext):
@@ -128,7 +112,6 @@ async def process_photo(message: Message, state: FSMContext):
     await state.update_data(photo_file_id=message.photo[-1].file_id)
     await state.set_state(ProfileForm.description)
     await message.answer(t(language, "enter_description"))
-
 
 @router.message(ProfileForm.description)
 async def process_description(message: Message, state: FSMContext):
@@ -172,11 +155,40 @@ async def process_contact(message: Message, state: FSMContext):
 @router.message(BrowseForm.class_name)
 async def browse_profiles_by_class(message: Message, state: FSMContext):
     language = await get_user_language(message.from_user.id)
-    profiles = await get_profiles_by_class(cls(txt(message.text)))
+    text = txt(message.text)
+
+    if text == t(language, "create_profile"):
+        await state.clear()
+        drop_cache(message.from_user.id)
+        await state.set_state(ProfileForm.gender)
+        await message.answer(t(language, "choose_gender"), reply_markup=gender_keyboard(language))
+        return
+
+    if text == t(language, "browse_profiles"):
+        await state.clear()
+        drop_cache(message.from_user.id)
+        await state.set_state(BrowseForm.class_name)
+        await message.answer(t(language, "browse_class"))
+        return
+
+    if text == t(language, "delete_profile"):
+        await state.clear()
+        existing_profile = await get_profile(message.from_user.id)
+        if not existing_profile:
+            await message.answer(t(language, "no_profile_to_delete"), reply_markup=main_keyboard(language))
+            return
+        await delete_profile(message.from_user.id)
+        await state.clear()
+        drop_cache(message.from_user.id)
+        await message.answer(t(language, "profile_deleted"), reply_markup=main_keyboard(language))
+        return
+
+    profiles = await get_profiles_by_class(cls(text))
     if not profiles:
         drop_cache(message.from_user.id)
-        await message.answer(t(language, "no_profiles"))
+        await message.answer(t(language, "no_profiles"), reply_markup=main_keyboard(language))
         return
+
     browse_cache[message.from_user.id] = profiles
     await state.clear()
     await send_profile_page(message, profiles, 0)
@@ -218,7 +230,6 @@ async def change_page(callback: CallbackQuery):
     await callback.message.delete()
     await send_profile_page(callback, profiles, index)
     await callback.answer()
-
 
 @router.callback_query(F.data == "change_class")
 async def change_class(callback: CallbackQuery, state: FSMContext):
